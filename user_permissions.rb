@@ -12,35 +12,33 @@ class UserPermissions
   end
 
   #  returns permissions if user is set in security context   */
-  def get_user_permissions 
+  def get_user_permissions
     user_permissions = Set.new
     if (@user != nil)
       user_permissions << :DEFAULT_PERMISSION
-      if (has_cm_team_role) 
-        user_permissions << :CM_TEAM_ROLE_PERMISSION
-      end
+      add_permissions_based_on_rule(:CM_TEAM_ROLE_PERMISSION, has_cm_team_role, user_permissions)
+      add_permissions_based_on_rule(:FINANCE_INVOICE_PERMISSION, has_invoice_finance_role, user_permissions)
       if (has_cm_invoice_view_role || has_invoice_finance_role)
         user_permissions << :CM_INVOICE_USER_PERMISSION
         user_permissions << :INVOICE_VIEW_PERMISSION
         user_permissions << :ACCESS_ALL_INVOICE_PERMISSION
       end
-      if (has_invoice_finance_role) 
-        user_permissions << :FINANCE_INVOICE_PERMISSION
-      end
-      if (has_application_access)
-        user_permissions << :CM_INVOICE_USER_PERMISSION
-      end
-      if (has_application_access(:CM_INVOICE_ROLE)) 
-        user_permissions << :CM_ANY_INVOICE_PERMISSION
-      end
-      if (has_application_access(:PA_INVOICE_ROLE)) 
-        user_permissions << :PA_ANY_INVOICE_PERMISSION
-      end
-      if (has_application_access(:SDT_INVOICE_ROLE))
-        user_permissions << :SDT_ANY_INVOICE_PERMISSION
-      end
+      add_permissions_based_on_rule(:CM_INVOICE_USER_PERMISSION, has_application_access(nil), user_permissions)
+      add_application_access_permissions_for_roles(user_permissions)
     end
     user_permissions
+  end
+
+  def add_application_access_permissions_for_roles user_permissions
+    {:CM_INVOICE_ROLE => :CM_ANY_INVOICE_PERMISSION,
+     :PA_INVOICE_ROLE => :PA_ANY_INVOICE_PERMISSION,
+     :SDT_INVOICE_ROLE => :SDT_ANY_INVOICE_PERMISSION}.each do |role, permission|
+      add_permissions_based_on_rule(permission, has_application_access(role), user_permissions)
+    end
+  end
+
+  def add_permissions_based_on_rule permission, rule, user_permissions
+    user_permissions << permission if rule
   end
 
   # permissions granted in context of an invoice and a user
@@ -90,7 +88,7 @@ class UserPermissions
     invoice_permissions
   end
 
-  def cm_invoice_editable?(approval_status) 
+  def cm_invoice_editable?(approval_status)
     [:NEW_STATUS, :CM_STATUS].include? approval_status
   end
 
