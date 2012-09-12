@@ -14,31 +14,30 @@ class UserPermissions
   #  returns permissions if user is set in security context   */
   def get_user_permissions
     user_permissions = Set.new
-    if (@user != nil)
-      user_permissions << :DEFAULT_PERMISSION
-      add_permissions_based_on_rule(:CM_TEAM_ROLE_PERMISSION, has_cm_team_role, user_permissions)
-      add_permissions_based_on_rule(:FINANCE_INVOICE_PERMISSION, has_invoice_finance_role, user_permissions)
-      if (has_cm_invoice_view_role || has_invoice_finance_role)
-        user_permissions << :CM_INVOICE_USER_PERMISSION
-        user_permissions << :INVOICE_VIEW_PERMISSION
-        user_permissions << :ACCESS_ALL_INVOICE_PERMISSION
-      end
-      add_permissions_based_on_rule(:CM_INVOICE_USER_PERMISSION, has_application_access(nil), user_permissions)
-      add_application_access_permissions_for_roles(user_permissions)
-    end
+    return user_permissions if @user.nil?
+    user_permissions << :DEFAULT_PERMISSION
+    add_permissions_for_rules(user_permissions)
     user_permissions
   end
 
-  def add_application_access_permissions_for_roles user_permissions
-    {:CM_INVOICE_ROLE => :CM_ANY_INVOICE_PERMISSION,
-     :PA_INVOICE_ROLE => :PA_ANY_INVOICE_PERMISSION,
-     :SDT_INVOICE_ROLE => :SDT_ANY_INVOICE_PERMISSION}.each do |role, permission|
-      add_permissions_based_on_rule(permission, has_application_access(role), user_permissions)
+  def add_permissions_for_rules user_permissions
+    rules_with_permissions.each do |rule, permissions|
+      add_permissions_based_on_rule(permissions, rule, user_permissions)
     end
   end
 
-  def add_permissions_based_on_rule permission, rule, user_permissions
-    user_permissions << permission if rule
+  def add_permissions_based_on_rule permissions, rule, user_permissions
+    user_permissions.merge(permissions) if rule.call
+  end
+
+  def rules_with_permissions
+    {lambda { has_cm_team_role } => [:CM_TEAM_ROLE_PERMISSION],
+     lambda { has_invoice_finance_role } => [:FINANCE_INVOICE_PERMISSION],
+     lambda { has_cm_invoice_view_role || has_invoice_finance_role } => [:CM_INVOICE_USER_PERMISSION, :INVOICE_VIEW_PERMISSION, :ACCESS_ALL_INVOICE_PERMISSION],
+     lambda { has_application_access(nil) } => [:CM_INVOICE_USER_PERMISSION],
+     lambda { has_application_access(:CM_INVOICE_ROLE) } => [:CM_ANY_INVOICE_PERMISSION],
+     lambda { has_application_access(:PA_INVOICE_ROLE) } => [:PA_ANY_INVOICE_PERMISSION],
+     lambda { has_application_access(:SDT_INVOICE_ROLE) } => [:SDT_ANY_INVOICE_PERMISSION]}
   end
 
   # permissions granted in context of an invoice and a user
